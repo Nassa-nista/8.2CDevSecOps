@@ -1,62 +1,39 @@
-pipeline {
-  agent any
+stage('SonarCloud Analysis') {
+  withEnv([
+    'SONAR_ORG=nassa-nista-org',                  // <-- change to your SonarCloud org key
+    'SONAR_PROJECT_KEY=Nassa-nista_8.2CDevSecOps' // <-- change to your SonarCloud project key
+  ]) {
+    withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+      bat '''
+      setlocal enabledelayedexpansion
 
-  options {
-    timestamps()
-    // default checkout is OK, but we keep an explicit one for clarity
-    skipDefaultCheckout(true)
-  }
+      echo Downloading Sonar Scanner...
+      rem -f: fail on HTTP errors, -S: show errors, -L: follow redirects, save to sonar.zip
+      curl.exe -fSL --retry 5 --retry-all-errors -o sonar.zip ^
+        https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-6.1.0.4477-windows-x64.zip
 
-  triggers {
-    // Optional: have Jenkins poll GitHub every 5 minutes
-    pollSCM('H/5 * * * *')
-  }
+      echo Unzipping...
+      powershell -NoProfile -Command "Expand-Archive -Path 'sonar.zip' -DestinationPath . -Force"
 
-  stages {
-    stage('Checkout') {
-      steps {
-        // This only works when the job is "Pipeline script from SCM" (Option B)
-        checkout scm
-      }
-    }
+      echo Finding scanner folder...
+      for /D %%D in (sonar-scanner-*-windows*) do set "SC=%%~fD"
+      if not defined SC (
+        echo Scanner folder not found. Listing current directory:
+        dir
+        exit /b 1
+      )
+      echo Found: !SC!
 
-    stage('Install Dependencies') {
-      steps {
-        bat 'npm --version'
-        // Use CI install for clean & repeatable installs
-        bat 'npm ci || npm install'
-      }
-    }
-
-    stage('NPM Audit (Non-Blocking)') {
-      steps {
-        // Let the build continue even if audit finds issues
-        bat 'npm audit || exit /b 0'
-      }
-    }
-
-    stage('SonarCloud Analysis') {
-      environment {
-        // Use a stable Windows scanner; update if Sonar shows a newer one
-        SCANNER_VERSION = '6.1.0.4477'
-      }
-      steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-          bat '''
-            echo Downloading Sonar Scanner...
-            curl -L -o sonar.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-%SCANNER_VERSION%-windows.zip
-
-            echo Unzipping...
-            powershell -Command "Expand-Archive -Path sonar.zip -DestinationPath . -Force"
-
-            echo Finding scanner folder...
-            for /d %%D in (sonar-scanner-*-windows) do set "SC=%%~fD"
-
-            echo Running scanner...
-            call "!SC!\\bin\\sonar-scanner.bat"
-          '''
-        }
-      }
+      echo Running scanner...
+      call "!SC!\\bin\\sonar-scanner.bat" ^
+        -D"sonar.projectKey=%SONAR_PROJECT_KEY%" ^
+        -D"sonar.organization=%SONAR_ORG%" ^
+        -D"sonar.host.url=https://sonarcloud.io" ^
+        -D"sonar.login=%SONAR_TOKEN%" ^
+        -D"sonar.sources=." ^
+        -D"sonar.exclusions=node_modules/**,**/*.test/**" ^
+        -D"sonar.javascript.lcov.reportPaths=coverage/lcov.info"
+      '''
     }
   }
 }
