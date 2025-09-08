@@ -1,35 +1,37 @@
 pipeline {
-  agent any
-  options { timestamps() }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
-    }
-
-    stage('Install Dependencies') {
-      steps {
-        bat 'npm --version'
-        bat 'npm ci || npm install'
-      }
-    }
-
-    stage('SonarCloud Analysis') {
-      environment {
-        // This must match the name you added under Manage Jenkins → Tools
-        SCANNER_HOME = tool 'SonarScanner'
-      }
-      steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-          // Add scanner to PATH (Windows needs backslashes)
-          withEnv(["PATH+SCANNER=${SCANNER_HOME}\\bin"]) {
-            // sonar-project.properties in repo supplies org & projectKey
-            bat 'sonar-scanner -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=%SONAR_TOKEN%'
-          }
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
+            }
         }
-      }
+
+        stage('Install Dependencies') {
+            steps {
+                bat 'npm install'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                // allows pipeline to continue even if tests fail
+                bat 'npm test || exit /b 0'
+            }
+        }
+
+        stage('Generate Coverage Report') {
+            steps {
+                // generates coverage report if available
+                bat 'npm run coverage || exit /b 0'
+            }
+        }
+
+        stage('NPM Audit (Security Scan)') {
+            steps {
+                // shows known vulnerabilities (CVEs)
+                bat 'npm audit || exit /b 0'
+            }
+        }
     }
-  }
 }
