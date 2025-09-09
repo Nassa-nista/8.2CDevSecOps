@@ -1,81 +1,62 @@
 pipeline {
-    agent any
+  agent any
 
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
-            }
-        }
+  environment {
+    // Make sure Jenkins can find Node and SonarScanner
+    NODEJS_HOME = 'C:\\Program Files\\nodejs'
+    SCANNER_HOME = 'C:\\sonar-scanner'                  // where you unzipped the scanner
+    PATH = "${env.SCANNER_HOME}\\bin;${env.NODEJS_HOME};${env.PATH}"
+  }
 
-        stage('Install Dependencies') {
-            steps {
-                bat 'npm install'
-            }
-        }
-
-        stage('Run Tests') {
-            steps {
-                // allows pipeline to continue even if tests fail
-                bat 'npm test || exit /b 0'
-            }
-        }
-
-        stage('Generate Coverage Report') {
-            steps {
-                // generates coverage report if available
-                bat 'npm run coverage || exit /b 0'
-            }
-        }
-
-        stage('SonarCloud Analysis') {
-            steps {
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-                    bat '''
-                        if not exist tools mkdir tools
-
-                        REM --- Download SonarScanner if not already there ---
-                        if not exist tools\\sonar-scanner\\bin\\sonar-scanner.bat (
-                          echo Downloading SonarScanner...
-                          powershell -Command ^
-                            "$url='https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-6.1.0.4477-windows.zip';" ^
-                            "$out='scanner.zip';" ^
-                            "Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing"
-
-                          echo Unzipping...
-                          powershell -Command "Expand-Archive -Path scanner.zip -DestinationPath tools -Force"
-
-                          for /d %%D in (tools\\sonar-scanner-*-windows) do (
-                            ren "%%D" "sonar-scanner"
-                          )
-                          del scanner.zip
-                        )
-
-                        REM --- Run scanner (uses sonar-project.properties file) ---
-                        set "SCANNER=%WORKSPACE%\\tools\\sonar-scanner\\bin\\sonar-scanner.bat"
-                        "%SCANNER%" -Dsonar.token=%SONAR_TOKEN%
-                    '''
-                }
-            }
-        }
-
-        stage('NPM Audit (Security Scan)') {
-            steps {
-                // shows known vulnerabilities (CVEs)
-                bat 'npm audit || exit /b 0'
-            }
-        }
-stage('SonarCloud Analysis') {
-    steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-            bat """
-                sonar-scanner ^
-                  -Dsonar.projectKey=Nassa-nista_8.2CDevSecOps ^
-                  -Dsonar.organization=nassa-nista ^
-                  -Dsonar.host.url=https://sonarcloud.io ^
-                  -Dsonar.login=%SONAR_TOKEN%
-            """
-        }
+  stages {
+    stage('Checkout') {
+      steps {
+        git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
+      }
     }
-}
 
+    stage('Verify Node') {
+      steps { bat 'node -v && npm -v' }
+    }
+
+    stage('Install Dependencies') {
+      steps { bat 'npm ci' } // same as install but deterministic
+    }
+
+    stage('Run Tests') {
+      steps { bat 'npm test -- --ci || exit /b 0' }
+      post {
+        always { junit allowEmptyResults: true, testResults: 'reports/junit/*.xml' }
+      }
+    }
+
+    stage('Generate Coverage Report') {
+      steps { bat 'npm run coverage || exit /b 0' }
+      post {
+        always {
+          archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true, fingerprint: true
+        }
+      }
+    }
+
+    stage('NPM Audit (Security Scan)') {
+      steps { bat 'npm audit --audit-level=high || exit /b 0' }
+    }
+
+    // >>> NEW STAGE <<<
+    stage('SonarCloud Analysis') {
+      steps {
+        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+          // sonar-project.properties is already in your repo root
+          bat '''
+            sonar-scanner ^
+              -Dsonar.projectKey=Nassa-nista_8.2CDevSecOps ^
+              -Dsonar.organization=nassa-nista ^
+              -Dsonar.host.url=https://sonarcloud.io ^
+              -Dsonar.login=%SONAR_TOKEN%
+          '''
+        }
+      }
+    }
+  }
+}
