@@ -65,5 +65,17 @@ pipeline {
                 bat 'npm audit || exit /b 0'
             }
         }
+stage('SonarCloud Analysis') {
+    steps {
+        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+            bat """
+                sonar-scanner ^
+                  -Dsonar.projectKey=Nassa-nista_8.2CDevSecOps ^
+                  -Dsonar.organization=nassa-nista ^
+                  -Dsonar.host.url=https://sonarcloud.io ^
+                  -Dsonar.login=%SONAR_TOKEN%
+            """
+        }
     }
 }
+
