@@ -2,9 +2,8 @@ pipeline {
   agent any
 
   environment {
-    // Make sure Jenkins can find Node and SonarScanner
     NODEJS_HOME = 'C:\\Program Files\\nodejs'
-    SCANNER_HOME = 'C:\\sonar-scanner'                  // where you unzipped the scanner
+    SCANNER_HOME = 'C:\\sonar-scanner'
     PATH = "${env.SCANNER_HOME}\\bin;${env.NODEJS_HOME};${env.PATH}"
   }
 
@@ -20,7 +19,7 @@ pipeline {
     }
 
     stage('Install Dependencies') {
-      steps { bat 'npm ci' } // same as install but deterministic
+      steps { bat 'npm ci' }
     }
 
     stage('Run Tests') {
@@ -43,11 +42,9 @@ pipeline {
       steps { bat 'npm audit --audit-level=high || exit /b 0' }
     }
 
-    // >>> NEW STAGE <<<
     stage('SonarCloud Analysis') {
       steps {
         withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-          // sonar-project.properties is already in your repo root
           bat '''
             sonar-scanner ^
               -Dsonar.projectKey=Nassa-nista_8.2CDevSecOps ^
@@ -60,3 +57,4 @@ pipeline {
     }
   }
 }
+
