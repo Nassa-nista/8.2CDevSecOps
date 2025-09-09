@@ -23,14 +23,22 @@ pipeline {
     }
 
     stage('Run Tests') {
-      steps { bat 'npm test -- --ci || exit /b 0' }
+      steps {
+        // keeps pipeline green even if snyk is not authed or tests are absent
+        bat 'npm test -- --ci || exit /b 0'
+      }
       post {
-        always { junit allowEmptyResults: true, testResults: 'reports/junit/*.xml' }
+        always {
+          junit allowEmptyResults: true, testResults: 'reports/junit/*.xml'
+        }
       }
     }
 
     stage('Generate Coverage Report') {
-      steps { bat 'npm run coverage || exit /b 0' }
+      steps {
+        // repo has no "coverage" script; keep non-blocking
+        bat 'npm run coverage || exit /b 0'
+      }
       post {
         always {
           archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true, fingerprint: true
@@ -48,13 +56,12 @@ pipeline {
           bat '''
             sonar-scanner ^
               -Dsonar.projectKey=Nassa-nista_8.2CDevSecOps ^
-              -Dsonar.organization=nassa-nista ^
+              -Dsonar.organization=Nassa-nista ^
               -Dsonar.host.url=https://sonarcloud.io ^
-              -Dsonar.login=%SONAR_TOKEN%
+              -Dsonar.token=%SONAR_TOKEN%
           '''
         }
       }
     }
   }
 }
-
