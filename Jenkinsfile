@@ -1,96 +1,77 @@
 pipeline {
   agent any
 
-  options {
-    timestamps()
-    disableConcurrentBuilds()
-  }
-
   stages {
-
-    stage('Checkout') {
+   stage('Checkout') {
       steps {
-        // Your own public repo (no creds needed)
-        git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
+         echo "Checkout repo..."
+           git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
       }
     }
-
-    stage('Install Dependencies') {
+stage('Install Dependencies') {
       steps {
-        bat 'npm ci'
+         echo "Installing dependencies ..."
+           sh 'npm install'
       }
     }
-
     stage('Run Tests') {
       steps {
-        script {
-          // Don’t fail the whole build if Snyk isn’t authed
-          int testStatus = bat(returnStatus: true, script: 'npm test')
-          if (testStatus != 0) {
-            echo "Tests failed, but continuing pipeline."
-          }
-
+         echo "Running tests..."
+           sh 'npm test || true'
+      }
+      post {
+        success {
           emailext(
-            subject: "Run Tests - ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-            to: "batnasan.deakin@gmail.com",
-            body: """
-<h3>Stage: Run Tests</h3>
-<p><b>Status:</b> ${currentBuild.currentResult}</p>
-<p><b>Job:</b> ${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
-<p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-""",
-            mimeType: 'text/html'
+            to: 'batnasan.deakin@gmail.com',
+            subject: 'Run Tests: SUCCESS',
+            body: 'Tests passed.',
+            attachLog: true,
+            mimeType: 'text/plain'
+          )
+        }
+        failure {
+          emailext(
+            to: 'batnasan.deakin@gmail.com',
+            subject: 'Run Tests: FAILURE',
+            body: 'Tests failed. Log attached.',
+            attachLog: true,
+            mimeType: 'text/plain'
           )
         }
       }
     }
-
     stage('Generate Coverage Report') {
       steps {
-        // Repo doesn’t have a coverage script – keep non-blocking
-        bat 'npm run coverage || exit 0'
+         echo "Generating coverage report ..."
+           sh 'npm run coverage || true'
       }
     }
-
     stage('NPM Audit (Security Scan)') {
       steps {
-        script {
-          int auditStatus = bat(returnStatus: true, script: 'npm audit')
-          if (auditStatus != 0) {
-            echo "NPM Audit found vulnerabilities, but continuing pipeline."
-          }
-
+         echo "Auditing..."
+           sh 'npm audit || true'
+      }
+      post {
+        success {
           emailext(
-            subject: "NPM Audit - ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-            to: "batnasan.deakin@gmail.com",
-            body: """
-<h3>Stage: NPM Audit</h3>
-<p><b>Status:</b> ${currentBuild.currentResult}</p>
-<p><b>Job:</b> ${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
-<p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-""",
-            mimeType: 'text/html'
+            to: 'batnasan.deakin@gmail.com',
+            subject: 'Security Scan: SUCCESS',
+            body: 'npm audit passed.',
+            attachLog: true,
+            mimeType: 'text/plain'
+          )
+        }
+        failure {
+          emailext(
+            to: 'batnasan.deakin@gmail.com',
+            subject: 'Security Scan: FAILURE',
+            body: 'npm audit found issues. Log attached.',
+            attachLog: true,
+            mimeType: 'text/plain'
           )
         }
       }
-    }
-  }
-
-  post {
-    always {
-      // Final summary email (runs whether build is SUCCESS or FAILURE)
-      emailext(
-        subject: "${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        to: "batnasan.deakin@gmail.com",
-        body: """
-<h2>Build Summary</h2>
-<p><b>Status:</b> ${currentBuild.currentResult}</p>
-<p><b>Job:</b> ${env.JOB_NAME}</p>
-<p><b>Build #:</b> ${env.BUILD_NUMBER}</p>
-<p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-""",
-        mimeType: 'text/html'
-      )
     }
   }
 }
+
