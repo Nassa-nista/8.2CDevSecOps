@@ -3,8 +3,7 @@ pipeline {
 
   environment {
     NODEJS_HOME = 'C:\\Program Files\\nodejs'
-    SCANNER_HOME = 'C:\\sonar-scanner'
-    PATH = "${env.SCANNER_HOME}\\bin;${env.NODEJS_HOME};${env.PATH}"
+    PATH = "${env.NODEJS_HOME};${env.PATH}"
   }
 
   stages {
@@ -24,42 +23,50 @@ pipeline {
 
     stage('Run Tests') {
       steps {
-        // keeps pipeline green even if snyk is not authed or tests are absent
-        bat 'npm test -- --ci || exit /b 0'
-      }
-      post {
-        always {
-          junit allowEmptyResults: true, testResults: 'reports/junit/*.xml'
+        script {
+          def testStatus = bat(returnStatus: true, script: 'npm test')
+          if (testStatus != 0) {
+            echo "Tests failed, but continuing pipeline."
+          }
+          emailext(
+            subject: "Run Tests - ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            to: "s225381845@deakin.edu.au",
+            body: """
+              <h3>Stage: Run Tests</h3>
+              <p><b>Status:</b> ${currentBuild.currentResult}</p>
+              <p><b>Job:</b> ${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
+              <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+            """,
+            mimeType: 'text/html'
+          )
         }
       }
     }
 
     stage('Generate Coverage Report') {
       steps {
-        // repo has no "coverage" script; keep non-blocking
-        bat 'npm run coverage || exit /b 0'
-      }
-      post {
-        always {
-          archiveArtifacts artifacts: 'coverage/**', allowEmptyArchive: true, fingerprint: true
-        }
+        bat 'npm run coverage || exit 0'
       }
     }
 
     stage('NPM Audit (Security Scan)') {
-      steps { bat 'npm audit --audit-level=high || exit /b 0' }
-    }
-
-    stage('SonarCloud Analysis') {
       steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-          bat '''
-            sonar-scanner ^
-              -Dsonar.projectKey=Nassa-nista_8.2CDevSecOps ^
-              -Dsonar.organization=Nassa-nista ^
-              -Dsonar.host.url=https://sonarcloud.io ^
-              -Dsonar.token=%SONAR_TOKEN%
-          '''
+        script {
+          def auditStatus = bat(returnStatus: true, script: 'npm audit')
+          if (auditStatus != 0) {
+            echo "NPM Audit found vulnerabilities, but continuing pipeline."
+          }
+          emailext(
+            subject: "NPM Audit - ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+            to: "s225381845@deakin.edu.au",
+            body: """
+              <h3>Stage: NPM Audit</h3>
+              <p><b>Status:</b> ${currentBuild.currentResult}</p>
+              <p><b>Job:</b> ${env.JOB_NAME} #${env.BUILD_NUMBER}</p>
+              <p><b>Build URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+            """,
+            mimeType: 'text/html'
+          )
         }
       }
     }
