@@ -58,7 +58,7 @@ pipeline {
           }
           emailext(
             subject: "NPM Audit - ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-            to: "s225381845@deakin.edu.au",
+            to: "batnasan.deakin@gmail.com",
             body: """
               <h3>Stage: NPM Audit</h3>
               <p><b>Status:</b> ${currentBuild.currentResult}</p>
