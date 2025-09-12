@@ -2,22 +2,24 @@ pipeline {
   agent any
 
   stages {
-   stage('Checkout') {
+    stage('Checkout') {
       steps {
-         echo "Checkout repo..."
-           git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
+        echo "Checkout repo..."
+        git branch: 'main', url: 'https://github.com/Nassa-nista/8.2CDevSecOps.git'
       }
     }
-stage('Install Dependencies') {
+
+    stage('Install Dependencies') {
       steps {
-         echo "Installing dependencies ..."
-           sh 'npm install'
+        echo "Installing dependencies ..."
+        bat 'npm install'
       }
     }
+
     stage('Run Tests') {
       steps {
-         echo "Running tests..."
-           sh 'npm test || true'
+        echo "Running tests..."
+        bat 'npm test || exit 0'
       }
       post {
         success {
@@ -40,16 +42,18 @@ stage('Install Dependencies') {
         }
       }
     }
+
     stage('Generate Coverage Report') {
       steps {
-         echo "Generating coverage report ..."
-           sh 'npm run coverage || true'
+        echo "Generating coverage report ..."
+        bat 'npm run coverage || exit 0'
       }
     }
+
     stage('NPM Audit (Security Scan)') {
       steps {
-         echo "Auditing..."
-           sh 'npm audit || true'
+        echo "Auditing..."
+        bat 'npm audit || exit 0'
       }
       post {
         success {
@@ -74,4 +78,3 @@ stage('Install Dependencies') {
     }
   }
 }
-
